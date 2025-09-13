@@ -44,7 +44,7 @@ func newRegistry() *registry {
 		removeChan:    make(chan removeRequest),
 		broadcastChan: make(chan broadcastRequest),
 	}
-	go r.loop() // Single goroutine
+	r.loop() // Single goroutine
 	return r
 }
 
@@ -75,8 +75,9 @@ func (r *registry) loop() {
 
 		case broadcastReq := <-r.broadcastChan:
 			for _, c := range r.byConn {
-				cc := c
-				go func() { _ = cc.msgHandler.Send(broadcastReq.w) }()
+				go func(cl *client) {
+					_ = cl.msgHandler.Send(broadcastReq.w)
+				}(c)
 			}
 		}
 	}
