@@ -78,6 +78,23 @@ func (m *MessageHandler) Receive() (*Wrapper, error) {
 	return wrapper, err
 }
 
+func (m *MessageHandler) SendBytes(frame []byte) error {
+	m.sendMutex.Lock()
+	defer m.sendMutex.Unlock()
+	return m.writeN(frame)
+}
+
+func MarshalFrame(w *Wrapper) ([]byte, error) {
+	payload, err := proto.Marshal(w)
+	if err != nil {
+		return nil, err
+	}
+	frame := make([]byte, 8+len(payload))
+	binary.LittleEndian.PutUint64(frame, uint64(len(payload)))
+	copy(frame[8:], payload)
+	return frame, nil
+}
+
 func (m *MessageHandler) Close() {
 	m.conn.Close()
 }

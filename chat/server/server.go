@@ -11,6 +11,30 @@ import (
 type client struct {
 	msgHandler *messages.MessageHandler
 	username   string
+	out        chan *messages.Wrapper
+	closed     chan struct{}
+}
+
+func newClient(msgHandler *messages.MessageHandler, username string) *client {
+	c := &client{
+		username:   username,
+		msgHandler: msgHandler,
+		out:        make(chan *messages.Wrapper, 128),
+		closed:     make(chan struct{}),
+	}
+	go c.writePump()
+	return c
+}
+
+func (c *client) writePump() {
+	defer close(c.closed)
+	defer c.msgHandler.Close()
+
+	for w := range c.out {
+		if err := c.msgHandler.Send(w); err != nil {
+			return
+		}
+	}
 }
 
 type addRequest struct {
@@ -42,7 +66,7 @@ func newRegistry() *registry {
 		byName:        make(map[string]*client),
 		addChan:       make(chan addRequest),
 		removeChan:    make(chan removeRequest),
-		broadcastChan: make(chan broadcastRequest),
+		broadcastChan: make(chan broadcastRequest, 1024),
 	}
 	go r.loop() // Single goroutine
 	return r
@@ -52,16 +76,14 @@ func (r *registry) loop() {
 	for {
 		select {
 		case addReq := <-r.addChan:
-			if addReq.c.username == "" {
-				addReq.response <- fmt.Errorf("username is empty")
+			if addReq.c.username == "" || r.byName[addReq.c.username] != nil {
+				addReq.response <- fmt.Errorf("username is empty or already exists")
 				continue
 			}
-			if _, exists := r.byName[addReq.c.username]; exists {
-				addReq.response <- fmt.Errorf("username %s already exists", addReq.c.username)
-				continue
-			}
-			r.byName[addReq.c.username] = addReq.c
-			r.byConn[addReq.c.msgHandler] = addReq.c
+
+			c := newClient(addReq.c.msgHandler, addReq.c.username)
+			r.byName[addReq.c.username] = c
+			r.byConn[addReq.c.msgHandler] = c
 			addReq.response <- nil
 
 		case removeReq := <-r.removeChan:
@@ -69,15 +91,18 @@ func (r *registry) loop() {
 			if c, ok := r.byConn[removeReq.msgHandler]; ok {
 				delete(r.byConn, removeReq.msgHandler)
 				delete(r.byName, c.username)
+				close(c.out)
+				<-c.closed
 				removed = c
 			}
 			removeReq.response <- removed
 
 		case broadcastReq := <-r.broadcastChan:
 			for _, c := range r.byConn {
-				go func(cl *client) {
-					_ = cl.msgHandler.Send(broadcastReq.w)
-				}(c)
+				select {
+				case c.out <- broadcastReq.w:
+				default:
+				}
 			}
 		}
 	}
