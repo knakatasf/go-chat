@@ -44,7 +44,7 @@ func newRegistry() *registry {
 		removeChan:    make(chan removeRequest),
 		broadcastChan: make(chan broadcastRequest),
 	}
-	r.loop() // Single goroutine
+	go r.loop() // Single goroutine
 	return r
 }
 
