@@ -6,7 +6,6 @@ import (
 	"log"
 	"net"
 	"os"
-	"sync"
 )
 
 type client struct {
@@ -14,52 +13,90 @@ type client struct {
 	username   string
 }
 
+type addRequest struct {
+	c        *client
+	response chan error
+}
+
+type removeRequest struct {
+	msgHandler *messages.MessageHandler
+	response   chan *client
+}
+
+type broadcastRequest struct {
+	w *messages.Wrapper
+}
+
 type registry struct {
-	mutex  sync.RWMutex
 	byConn map[*messages.MessageHandler]*client
 	byName map[string]*client
+
+	addChan       chan addRequest
+	removeChan    chan removeRequest
+	broadcastChan chan broadcastRequest
 }
 
 func newRegistry() *registry {
-	return &registry{
-		byConn: make(map[*messages.MessageHandler]*client),
-		byName: make(map[string]*client),
+	r := &registry{
+		byConn:        make(map[*messages.MessageHandler]*client),
+		byName:        make(map[string]*client),
+		addChan:       make(chan addRequest),
+		removeChan:    make(chan removeRequest),
+		broadcastChan: make(chan broadcastRequest),
+	}
+	go r.loop() // Single goroutine
+	return r
+}
+
+func (r *registry) loop() {
+	for {
+		select {
+		case addReq := <-r.addChan:
+			if addReq.c.username == "" {
+				addReq.response <- fmt.Errorf("username is empty")
+				continue
+			}
+			if _, exists := r.byName[addReq.c.username]; exists {
+				addReq.response <- fmt.Errorf("username %s already exists", addReq.c.username)
+				continue
+			}
+			r.byName[addReq.c.username] = addReq.c
+			r.byConn[addReq.c.msgHandler] = addReq.c
+			addReq.response <- nil
+
+		case removeReq := <-r.removeChan:
+			var removed *client
+			if c, ok := r.byConn[removeReq.msgHandler]; ok {
+				delete(r.byConn, removeReq.msgHandler)
+				delete(r.byName, c.username)
+				removed = c
+			}
+			removeReq.response <- removed
+
+		case broadcastReq := <-r.broadcastChan:
+			for _, c := range r.byConn {
+				go func(cl *client) {
+					_ = cl.msgHandler.Send(broadcastReq.w)
+				}(c)
+			}
+		}
 	}
 }
 
 func (r *registry) add(c *client) error {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if c.username == "" {
-		return fmt.Errorf("username is empty")
-	}
-	if _, exists := r.byName[c.username]; exists {
-		return fmt.Errorf("user %s already exists", c.username)
-	}
-	r.byConn[c.msgHandler] = c
-	r.byName[c.username] = c
-	return nil
+	res := make(chan error, 1)
+	r.addChan <- addRequest{c: c, response: res}
+	return <-res
 }
 
-func (r *registry) remove(msgHandler *messages.MessageHandler) (removed *client) {
-	r.mutex.Lock()
-	defer r.mutex.Unlock()
-	if c, ok := r.byConn[msgHandler]; ok {
-		delete(r.byConn, msgHandler)
-		delete(r.byName, c.username)
-		return c
-	}
-	return nil
+func (r *registry) remove(msgHandler *messages.MessageHandler) *client {
+	res := make(chan *client, 1)
+	r.removeChan <- removeRequest{msgHandler: msgHandler, response: res}
+	return <-res
 }
 
 func (r *registry) broadcast(w *messages.Wrapper) {
-	r.mutex.RLock()
-	defer r.mutex.RUnlock()
-	for _, c := range r.byConn {
-		go func(cc *client) {
-			_ = cc.msgHandler.Send(w)
-		}(c)
-	}
+	r.broadcastChan <- broadcastRequest{w: w}
 }
 
 var users = newRegistry()
@@ -96,6 +133,7 @@ func handleClient(msgHandler *messages.MessageHandler) {
 	c := &client{msgHandler: msgHandler, username: username}
 	if err := users.add(c); err != nil {
 		_ = msgHandler.Send(notice("Registration failed: " + err.Error()))
+		return
 	}
 
 	users.broadcast(notice(fmt.Sprintf("User %s has joined the room", username)))
