@@ -12,15 +12,17 @@ type client struct {
 	msgHandler *messages.MessageHandler
 	username   string
 	out        chan *messages.Wrapper
-	closed     chan struct{}
+	closed     chan struct{} // Unbuffered channel
 }
 
 func newClient(msgHandler *messages.MessageHandler, username string) *client {
 	c := &client{
 		username:   username,
 		msgHandler: msgHandler,
-		out:        make(chan *messages.Wrapper, 128),
-		closed:     make(chan struct{}),
+		// Can hold up to 128 messages in this channel
+		// Bounded queue -> But, we need a default clause otherwise goroutine blocks!!!
+		out:    make(chan *messages.Wrapper, 128),
+		closed: make(chan struct{}), // Signal channel
 	}
 	go c.writePump()
 	return c
@@ -91,8 +93,11 @@ func (r *registry) loop() {
 			if c, ok := r.byConn[removeReq.msgHandler]; ok {
 				delete(r.byConn, removeReq.msgHandler)
 				delete(r.byName, c.username)
-				close(c.out)
-				<-c.closed
+				close(c.out) // This is necessary!! writePump() goroutine is waiting a new message infinitely. We need to signal that there is no more new messages.
+				<-c.closed   // We need this!! Because there might be leftover buffered messages in writePump()
+				// <-c.closed(): receive operation. Normally, if nothing has been sent, it would block
+				// But, if the channel is closed, <-channel immediately return zero value
+				// In this program, it blocks until the closed channel is closed
 				removed = c
 			}
 			removeReq.response <- removed
@@ -102,6 +107,9 @@ func (r *registry) loop() {
 				select {
 				case c.out <- broadcastReq.w:
 				default:
+					// If c.out reaches 128 messages, the select default kicks in -> new messages are dropped
+					// We don't want to pile any more messages in the out channel
+					// If no default, this will block if c.out is full!!!
 				}
 			}
 		}

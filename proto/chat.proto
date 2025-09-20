@@ -3,18 +3,54 @@ option go_package = "./messages";
 
 /* Register a username */
 message Registration {
-    string username = 1;
+  string username = 1;
 }
 
-/* Regular chat message with username + message */
 message Chat {
-    string username = 1;
-    string message_body = 2;
+  string username = 1;
+  string message_body = 2;
+}
+
+/* Server/system messages (optionally scoped to a room) */
+message ServerNotice {
+  string text = 1;
+  string room = 2; // empty = global
+}
+
+/* Rooms */
+message RoomJoin {
+  string username = 1;
+  string room = 2;
+}
+
+message RoomLeave {
+  string username = 1;
+  string room = 2;
+}
+
+message RoomChat {
+  string username = 1;
+  string room = 2;
+  string message_body = 3;
+}
+
+/* Direct / private message */
+message DirectChat {
+  string from = 1;
+  string to   = 2;
+  string message_body = 3;
 }
 
 message Wrapper {
-    oneof msg {
-        Registration registration_message = 1;
-        Chat chat_message = 2;
-    }
+  oneof msg {
+    Registration registration_message = 1;
+    Chat         chat_message         = 2; // global (legacy)
+    ServerNotice server_notice        = 3;
+
+    RoomJoin     room_join            = 10;
+    RoomLeave    room_leave           = 11;
+    RoomChat     room_chat            = 12;
+
+    DirectChat   direct_chat          = 20;
+  }
 }
