@@ -6,45 +6,39 @@ message Registration {
   string username = 1;
 }
 
-message Chat {
-  string username = 1;
-  string message_body = 2;
-}
-
-/* Server/system messages (optionally scoped to a room) */
+/* Server/system message (optionally scoped to a room) */
 message ServerNotice {
   string text = 1;
-  string room = 2; // empty = global
+  string room = 2; // empty = not scoped to a room
 }
 
 /* Rooms */
 message RoomJoin {
-  string username = 1;
-  string room = 2;
+  string username = 1; // server will ignore/overwrite
+  string room     = 2;
 }
 
 message RoomLeave {
-  string username = 1;
-  string room = 2;
+  string username = 1; // server will ignore/overwrite
+  string room     = 2;
 }
 
 message RoomChat {
-  string username = 1;
-  string room = 2;
+  string username    = 1; // server will overwrite with authenticated user
+  string room        = 2;
   string message_body = 3;
 }
 
-/* Direct / private message */
+/* Direct message */
 message DirectChat {
-  string from = 1;
-  string to   = 2;
+  string from         = 1; // server will overwrite
+  string to           = 2;
   string message_body = 3;
 }
 
 message Wrapper {
   oneof msg {
     Registration registration_message = 1;
-    Chat         chat_message         = 2; // global (legacy)
     ServerNotice server_notice        = 3;
 
     RoomJoin     room_join            = 10;
