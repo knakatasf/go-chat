@@ -2,6 +2,7 @@ package messages
 
 import (
 	"encoding/binary"
+	"io"
 	"net"
 	"sync"
 
@@ -58,24 +59,40 @@ func (m *MessageHandler) Send(wrapper *Wrapper) error {
 
 	prefix := make([]byte, 8)
 	binary.LittleEndian.PutUint64(prefix, uint64(len(serialized)))
-	m.writeN(prefix)
-	m.writeN(serialized)
+	if err := m.writeN(prefix); err != nil { // <- check error
+		return err
+	}
+	if err := m.writeN(serialized); err != nil { // <- check error
+		return err
+	}
 
 	return nil
 }
 
 func (m *MessageHandler) Receive() (*Wrapper, error) {
 	prefix := make([]byte, 8)
-	m.readN(prefix)
+	if err := m.readN(prefix); err != nil { // Propagate read errors (incl. EOF)
+		return nil, err
+	}
 
 	payloadSize := binary.LittleEndian.Uint64(prefix)
+	if payloadSize == 0 { // Defensive: treat 0-size as closed/invalid
+		return nil, io.EOF
+	}
 
 	payload := make([]byte, payloadSize)
-	m.readN(payload)
+	if err := m.readN(payload); err != nil { // Propagate read errors
+		return nil, err
+	}
 
 	wrapper := &Wrapper{}
-	err := proto.Unmarshal(payload, wrapper)
-	return wrapper, err
+	if err := proto.Unmarshal(payload, wrapper); err != nil {
+		return nil, err
+	}
+	if wrapper.GetMsg() == nil {
+		return nil, io.EOF
+	}
+	return wrapper, nil
 }
 
 func (m *MessageHandler) SendBytes(frame []byte) error {
