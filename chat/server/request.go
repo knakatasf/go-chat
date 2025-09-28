@@ -1,6 +1,8 @@
 package main
 
-import "chat/messages"
+import (
+	"chat/messages"
+)
 
 type addRequest struct {
 	c        *client

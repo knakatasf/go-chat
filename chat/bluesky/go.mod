@@ -1,7 +1,5 @@
-module chat
+module bluesky
 
 go 1.23.1
-
-require google.golang.org/protobuf v1.36.9
 
 require github.com/gorilla/websocket v1.5.3 // indirect

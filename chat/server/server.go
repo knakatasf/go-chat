@@ -2,6 +2,7 @@ package main
 
 import (
 	"chat/messages"
+	"context"
 	"fmt"
 	"log"
 	"net"
@@ -125,6 +126,10 @@ func main() {
 		log.Fatalln(err)
 	}
 	log.Println("listening on", addr)
+
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+	go startJetstreamConsumer(ctx, "bluesky")
 
 	for {
 		conn, err := listener.Accept()
