@@ -23,3 +23,8 @@ To run server:
 
 To run client:
 `go run client/client.go username servername:port`
+
+
+
+
+`go run chat/server 9999`
