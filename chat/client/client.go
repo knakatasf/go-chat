@@ -3,11 +3,17 @@ package main
 import (
 	"bufio"
 	"chat/messages"
+	"flag"
 	"fmt"
 	"log"
 	"net"
 	"os"
 	"strings"
+
+	"fyne.io/fyne/v2"
+	"fyne.io/fyne/v2/app"
+	"fyne.io/fyne/v2/container"
+	"fyne.io/fyne/v2/widget"
 )
 
 func receiveMessage(msgHandler *messages.MessageHandler) {

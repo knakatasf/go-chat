@@ -15,10 +15,10 @@ import (
 
 // Simple Jetstream event structure
 type JetEvent struct {
-	Kind   string `json:"kind"` // usually "commit"
+	Kind   string `json:"kind"`
 	Commit struct {
-		Repo   string          `json:"repo"`   // DID (user id)
-		Record json.RawMessage `json:"record"` // JSON of post, like, etc.
+		Repo   string          `json:"repo"`
+		Record json.RawMessage `json:"record"`
 	} `json:"commit"`
 }
 
@@ -65,7 +65,7 @@ func startJetstreamConsumer(ctx context.Context, room string) {
 	}
 	// So final url looks: wss://jetstream1.us-east.bsky.network/subscribe?wantedCollections=app.bsky.feed.post
 
-	backoff := time.Second
+	backoff := time.Second // one second
 
 	for {
 		select {
@@ -86,7 +86,7 @@ func startJetstreamConsumer(ctx context.Context, room string) {
 			continue
 		}
 		log.Println("[bsky] connected")
-		backoff = time.Second
+		backoff = time.Second // reset backoff to 1 second
 
 		// read loop
 		for {
@@ -97,7 +97,7 @@ func startJetstreamConsumer(ctx context.Context, room string) {
 				break // reconnect
 			}
 
-			var ev JetEvent
+			var ev JetEvent // parser
 			if json.Unmarshal(data, &ev) != nil || ev.Kind != "commit" {
 				continue
 			}
