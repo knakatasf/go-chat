@@ -36,6 +36,16 @@ message DirectChat {
   string message_body = 3;
 }
 
+/* Bluesky message*/
+message BlueskyMessage {
+  string message_body = 1;
+  string lang         = 2;
+}
+
+message LanguagePreference {
+  string lang = 1;
+}
+
 message Wrapper {
   oneof msg {
     Registration registration_message = 1;
@@ -46,5 +56,8 @@ message Wrapper {
     RoomChat     room_chat            = 12;
 
     DirectChat   direct_chat          = 20;
+
+    BlueskyMessage bsky_msg           = 30;
+    LanguagePreference lang_pref      = 35;
   }
 }
